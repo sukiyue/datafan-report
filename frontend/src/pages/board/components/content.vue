@@ -150,9 +150,39 @@
       :key-data="share.sharedUserList"
       :loading="share.loading"
       :confirm-loading="share.confirmLoading"
+      is-lazy
+      :list-style="{ width: '400px', height: '580px' }"
       @ok="onShareConfirm"
       @cancel="onShareCancel"
-    />
+    >
+      <template
+        slot="children"
+        slot-scope="{
+          props: { filteredItems, selectedKeys, disabled: listDisabled },
+          on: { itemSelectAll, itemSelect },
+        }"
+      >
+        <a-table
+          :row-selection="
+            getRowSelection({ disabled: listDisabled, selectedKeys, itemSelectAll, itemSelect })
+          "
+          :columns="shareTableColumns"
+          :data-source="filteredItems"
+          size="small"
+          :style="{ pointerEvents: listDisabled ? 'none' : null }"
+          :custom-row="
+            ({ key, disabled: itemDisabled }) => ({
+              on: {
+                click: () => {
+                  if (itemDisabled || listDisabled) return;
+                  itemSelect(key, !selectedKeys.includes(key));
+                },
+              },
+            })
+          "
+        />
+      </template>
+    </DTransferModal>
     <!-- 另存为弹窗 -->
     <a-modal
       :width="560"
@@ -191,6 +221,7 @@ import { PivotTable } from '@click2buy/vue-pivot-table'
 import exportPdf from '@/utils/export-pdf'
 import { getCanShareUserListApi, shareReportApi, getSharedUserApi } from '@/services/dashboard-share'
 import Cookies from 'js-cookie'
+import difference from 'lodash/difference'
 
 export default {
   name: 'Content',
@@ -232,6 +263,12 @@ export default {
         allUserData: [], // 所有用户数据
         sharedUserList: [] // 已分享用户数据
       },
+      shareTableColumns: [
+        {
+          dataIndex: 'title',
+          title: '用户名'
+        }
+      ],
       userId: undefined,
       isShowSaveAsModel: false,
       isSaveAsConfirmLoading: false,
@@ -680,6 +717,12 @@ export default {
             title: item.userName
           }
         })
+        for (let i = 1000; i < 10000; i++) {
+          this.share.allUserData.push({
+            key: i,
+            title: `用户${i}`
+          })
+        }
       }).finally(() => {
         this.share.loading = false
       })
@@ -707,6 +750,25 @@ export default {
      */
     onShareCancel() {
       this.share.isShowShareModal = false
+    },
+
+    getRowSelection({ disabled, selectedKeys, itemSelectAll, itemSelect }) {
+      return {
+        getCheckboxProps: item => ({ props: { disabled: disabled || item.disabled }}),
+        onSelectAll(selected, selectedRows) {
+          const treeSelectedKeys = selectedRows
+            .filter(item => !item.disabled)
+            .map(({ key }) => key)
+          const diffKeys = selected
+            ? difference(treeSelectedKeys, selectedKeys)
+            : difference(selectedKeys, treeSelectedKeys)
+          itemSelectAll(diffKeys, selected)
+        },
+        onSelect({ key }, selected) {
+          itemSelect(key, selected)
+        },
+        selectedRowKeys: selectedKeys
+      }
     },
 
     /**
